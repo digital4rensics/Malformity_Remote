@@ -12,8 +12,202 @@ import json
 import urllib2
 from maltego import *
 from helpers import *
+from farsight import query
 from datetime import datetime
 
+# Farsight Domain pDNS
+# Returns passive IPs for a given domain
+# Input: maltego.Domain
+# Output: maltego.IPv4Address
+# Requires transform setting called 'apikey'
+def pDNS_Dom2IP(dom):
+	TRX = MaltegoTransform()
+	
+	domain = dom.Value
+	aKey = dom.getTransformSetting('apikey')
+	try:
+		results = query('-r', domain, 0, 'n', aKey)
+	except:
+		results = 'none'
+		TRX.addUIMessage('No pDNS Results')
+		
+	if not results == 'none':
+		for result in results:
+			data = json.loads(result)
+			if data.has_key('time_first'):
+				first = data['time_first']
+				last = data['time_last']
+			elif data.has_key('zone_time_first'):
+				first = data['zone_time_first']
+				last = data['zone_time_last']
+			
+			fnice = datetime.datetime.fromtimestamp(int(first)).strftime('%m-%d-%Y')
+			lnice = datetime.datetime.fromtimestamp(int(last)).strftime('%m-%d-%Y')
+		
+			if data['rrtype'] == 'A':
+				for item in data['rdata']: 
+					Ent = TRX.addEntity('maltego.IPv4Address', item)
+					Ent.setLinklabel(fnice + ' - ' + lnice)
+	
+	TRX.returnOutput()
+
+# Farsight Domain wildcard pDNS
+# Returns subdomains for a given domain using the *.DOMAIN.com format
+# Input: maltego.Domain
+# Output: maltego.Domain
+# Requires transform setting called 'apikey'
+def pDNS_Dom2IP(dom):
+	TRX = MaltegoTransform()
+	
+	domain = dom.Value
+	aKey = dom.getTransformSetting('apikey')
+	try:
+		results = query('-r', domain, 0, 'n', aKey)
+	except:
+		results = 'none'
+		TRX.addUIMessage('No pDNS Results')
+		
+	if not results == 'none':
+		for result in results:
+			data = json.loads(result)
+			if data.has_key('time_first'):
+				first = data['time_first']
+				last = data['time_last']
+			elif data.has_key('zone_time_first'):
+				first = data['zone_time_first']
+				last = data['zone_time_last']
+				
+			fnice = datetime.datetime.fromtimestamp(int(first)).strftime('%m-%d-%Y')
+			lnice = datetime.datetime.fromtimestamp(int(last)).strftime('%m-%d-%Y')
+			
+			if data['rrtype'] == 'A':
+				Ent = TRX.addEntity('maltego.Domain', data['rrname'].rstrip('.'))
+				Ent.setLinkLabel(fnice + ' - ' + lnice)
+
+	TRX.returnOutput()
+	
+# Farsight Other RRset pDNS
+# Returns additional RRSet records for a given domain
+# Input: maltego.Domain
+# Output: maltego.Phrase, maltego.MXRecord, maltego.NSRecord
+# Requires transform setting called 'apikey'
+def pDNS_OtherRR(dom):
+	TRX = MaltegoTransform()
+	
+	domain = dom.Value
+	aKey = dom.getTransformSetting('apikey')
+	try:
+		results = query('-r', domain, 0, 'n', aKey)
+	except:
+		results = 'none'
+		TRX.addUIMessage('No pDNS Results')
+
+	if not results == 'none':
+		for result in results:
+			data = json.loads(result)
+			if data.has_key('time_first'):
+				first = data['time_first']
+				last = data['time_last']
+			elif data.has_key('zone_time_first'):
+				first = data['zone_time_first']
+				last = data['zone_time_last']
+				
+			fnice = datetime.datetime.fromtimestamp(int(first)).strftime('%m-%d-%Y')
+			lnice = datetime.datetime.fromtimestamp(int(last)).strftime('%m-%d-%Y')
+		
+			if data['rrtype'] == 'NS':
+				for item in data['rdata']:
+					Ent = TRX.addEntity('maltego.NSRecord', item)
+					Ent.setLinkLabel(fnice + ' - ' + lnice)
+			elif data['rrtype'] == 'MX':
+				for item in data['rdata']:
+					Ent = TRX.addEntity('maltego.MXRecord', item)
+					Ent.setLinkLabel(fnice + ' - ' + lnice)
+			elif data['rrtype'] == 'CNAME':
+				for item in data['rdata']:
+					Ent = TRX.addEntity('maltego.Domain', item.rstrip('.'))
+					Ent.setLinkLabel(fnice + ' - ' + lnice)
+			elif data['rrtype'] == 'A':
+				pass
+			else:
+				type = data['rrtype']
+				for item in data['rdata']:
+					label = type + ' ' + item
+					Ent = TRX.addEntity('maltego.Phrase', label)
+					Ent.setLinkLabel(fnice + ' - ' + lnice)
+					
+	TRX.returnOutput()
+
+# Farsight IP pDNS
+# Returns passive Domains for a given IP
+# Input: maltego.IPv4Address
+# Output: maltego.Domain
+# Requires transform setting called 'apikey'
+def pDNS_IP2Dom(ip):
+	TRX = MaltegoTransform()
+	
+	ip = ip.Value
+	aKey = ip.getTransformSetting('apikey')
+	try:
+		results = query('-i', ip, 0, 'n', aKey)
+	except:
+		results = 'none'
+		TRX.addUIMessage('No pDNS Results')
+	
+	if not results == 'none':	
+		for result in results:
+			data = json.loads(result)
+			if data.has_key('rrname'):
+				if data.has_key('time_first'):
+					first = data['time_first']
+					last = data['time_last']
+				elif data.has_key('zone_time_first'):
+					first = data['zone_time_first']
+					last = data['zone_time_last']
+				
+				fnice = datetime.datetime.fromtimestamp(int(first)).strftime('%m-%d-%Y')
+				lnice = datetime.datetime.fromtimestamp(int(last)).strftime('%m-%d-%Y')
+			
+				Ent = TRX.addEntity('maltego.Domain', data['rrname'].rstrip('.'))
+				Ent.setLinkLabel(fnice + ' - ' + lnice)
+			
+	TRX.returnOutput()
+
+# Farsight IP pDNS
+# Returns passive Domains for a given Name Server
+# Input: maltego.NSRecord
+# Output: maltego.Domain
+# Requires transform setting called 'apikey'
+def pDNS_NS2Dom(ns):
+	TRX = MaltegoTransform()
+	
+	NS = ns.Value
+	aKey = ns.getTransformSetting('apikey')
+	try:
+		results = query('-n', ns, 0, 'n', aKey)
+	except:
+		results = 'none'
+		TRX.addUIMessage('No pDNS Results')
+	
+	if not results == 'none':	
+		for result in results:
+			data = json.loads(result)
+			if data.has_key('rrname'):
+				if data.has_key('time_first'):
+					first = data['time_first']
+					last = data['time_last']
+				elif data.has_key('zone_time_first'):
+					first = data['zone_time_first']
+					last = data['zone_time_last']
+				
+				fnice = datetime.datetime.fromtimestamp(int(first)).strftime('%m-%d-%Y')
+				lnice = datetime.datetime.fromtimestamp(int(last)).strftime('%m-%d-%Y')
+			
+				Ent = TRX.addEntity('maltego.Domain', data['rrname'].rstrip('.'))
+				Ent.setLinkLabel(fnice + ' - ' + lnice)
+			
+	TRX.returnOutput()
+				
 # Team CYMRU Hash Check
 # Returns a property with results from a team CYMRU hash lookup
 # Input: malformity.Hash
