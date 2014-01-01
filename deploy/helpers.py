@@ -12,6 +12,7 @@
 
 import sys
 import socket
+import urllib
 import urllib2
 from BeautifulSoup import BeautifulSoup
 
@@ -101,4 +102,49 @@ def vic(data, type):
 	except:
 		page = "err"
 		
-	return page	
+	return page
+	
+def vtM(check, val, key)
+	try:
+		if check == 'dom':
+			url = 'https://www.virustotal.com/vtapi/v2/domain/report'
+			parameters = {'domain': val, 'apikey': key}
+		elif check == 'ip':
+			url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
+			parameters = {'ip': val, 'apikey': key}
+			
+		page = urllib2.urlopen('%s?%s' % (url, urllib.urlencode(parameters))).read()
+	except:
+		page = "err"
+		
+	return page
+	
+def vtSearch(val, key)
+	try:
+		url = 'https://www.virustotal.com/vtapi/v2/file/search'
+		params = {'apikey':key, 'query':val}
+		page = urllib2.urlopen('%s?%s' % (url, urllib.urlencode(parameters))).read()
+	except:
+		page = "err"
+		
+	return page
+	
+def vtGetB(val, key)
+	try:
+		url = 'https://www.virustotal.com/vtapi/v2/file/behaviour'
+		params = {'apikey':key, 'hash':hash}
+		page = urllib2.urlopen('%s?%s' % (url, urllib.urlencode(parameters))).read()
+	except:
+		page = "err"
+		
+	return page
+	
+def vtGetR(val, key)
+	try:
+		url = 'https://www.virustotal.com/vtapi/v2/file/report'
+		params = {'apikey':key, 'resource':val, 'allinfo':1}
+		page = urllib2.urlopen('%s?%s' % (url, urllib.urlencode(parameters))).read()
+	except:
+		page = "err"
+		
+	return page

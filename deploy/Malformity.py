@@ -9,6 +9,7 @@
 
 import sys
 import json
+import urllib2
 from maltego import *
 from helpers import *
 from datetime import datetime
@@ -43,7 +44,7 @@ def trx_CYMRUCheck(hash):
 # Returns tracked IP addresses from ISC AS Reports
 # Input: maltego.AS
 # Output: maltego.IPv4Address
-# Optional Setting: 'limit' - limits number of results, default = 10
+# Transform Setting: 'limit' - limits number of results, default = 10
 def isc_ASReport(asn):
 	TRX = MaltegoTransform()
 	val = asn.Value
@@ -454,7 +455,7 @@ def vi_hash2mutex(hash):
 # Returns Registry Entries for a ViCheck analysis
 # Input: malformity.Hash
 # Output: malformity.RegistryEntry
-def vi_hash2reg(hash)
+def vi_hash2reg(hash):
 	TRX = MaltegoTransform()
 	
 	val = hash.Value
@@ -476,3 +477,335 @@ def vi_hash2reg(hash)
 		TRX.addUIMessage('Error Retrieving ViCheck Page')
 		
 	return TRX.returnOutput()
+
+# Originally written by Marcus Eddy
+# Requires a transform setting called 'apikey'
+# VirusTotal Domain to IP
+# Returns passive IP data for a specific domain
+# Input: maltego.Domain
+# Output: maltego.IPv4Address
+def vt_dom2ip(dom):
+	TRX = MaltegoTransform()
+	
+	val = dom.Value
+	aKey = dom.getTransformSetting('apikey')
+	page = vtM('dom', val, aKey)
+	
+	if not page == "err":
+		try:
+			response_dict = json.loads(page)
+			for i in range(0, len(response_dict['resolutions'])):
+				ip = response_dict['resolutions'][i]['ip_address']
+				Ent = TRX.addEntity('maltego.IPv4Address', ip)
+		except IOError:
+			TRX.addUIMessage('VT IO Error')
+		except KeyError:
+			TRX.addUIMessage('VT Key Error')
+	else:
+		TRX.addUIMessage('Error with VT Request')
+		
+	return TRX.returnOutput()
+	
+# Originally written by Marcus Eddy
+# Requires a transform setting called 'apikey'
+# VirusTotal IP to Domain
+# Returns passive Domain data for a specific IP
+# Input: maltego.IPv4Address
+# Output: maltego.Domain
+def vt_ip2dom(ip):
+	TRX = MaltegoTransform()
+	
+	val = ip.Value
+	aKey = ip.getTransformSetting('apikey')
+	page = vtM('ip', val, aKey)
+	
+	if not page == "err":
+		try:
+			response_dict = json.loads(page)
+			for i in range(0, len(response_dict['resolutions'])):
+				dom = response_dict['resolutions'][i]['hostname']
+				Ent = TRX.addEntity('maltego.Domain', dom)
+		except IOError:
+			TRX.addUIMessage('VT IO Error')
+		except KeyError:
+			TRX.addUIMessage('VT Key Error')
+	else:
+		TRX.addUIMessage('Error with VT Request')
+		
+	return TRX.returnOutput()
+
+# Requires a transform setting called 'apikey'	
+# VirusTotal Domain to Hash
+# Returns hashes that match based on the domain search method
+# Input: maltego.Domain
+# Output: malformity.Hash
+def vt_dom2hash(dom):
+	TRX = MaltegoTransform()
+	
+	val = dom.Value
+	aKey = dom.getTransformSetting('apikey')
+	page = vtSearch(val, aKey)
+	
+	if not page == "err":
+		try:
+			data = json.loads(page)
+			if data['response_code'] == 1:
+				results = data['hashes']
+				for result in results:
+					Ent = TRX.addEntity('malformity.Hash', result)
+			else:
+				TRX.addUIMessage('No VT Search Results')
+		except:
+			TRX.addUIMessage('Error parsing VT results')
+	else:
+		TRX.addUIMessage('Error with VT Request')
+	
+	return TRX.returnOutput()
+	
+# Requires a transform setting called 'apikey'	
+# VirusTotal IP to Hash
+# Returns hashes that match based on the IP search method
+# Input: maltego.IPv4Address
+# Output: malformity.Hash
+def vt_ip2hash(ip):
+	TRX = MaltegoTransform()
+	
+	val = ip.Value
+	aKey = ip.getTransformSetting('apikey')
+	page = vtSearch(val, aKey)
+	
+	if not page == "err":
+		try:
+			data = json.loads(page)
+			if data['response_code'] == 1:
+				results = data['hashes']
+				for result in results:
+					Ent = TRX.addEntity('malformity.Hash', result)
+			else:
+				TRX.addUIMessage('No VT Search Results')
+		except:
+			TRX.addUIMessage('Error parsing VT results')
+	else:
+		TRX.addUIMessage('Error with VT Request')
+	
+	return TRX.returnOutput()
+	
+# Requires a transform setting called 'apikey'	
+# VirusTotal Hash 2 ExifTool
+# Returns ExifTool information for a given hash
+# Input: malformity.hash
+# Output: maltego.Phrase, malformity.Filename
+# ^ Against best practice, due to be split out
+def vt_hash2exif(hash):
+	TRX = MaltegoTransform()
+	
+	val = hash.Value
+	aKey = hash.getTransformSetting('apikey')
+	page = vtGetR(val, aKey)
+	
+	if not page == "err":
+		try:
+			data = json.loads(page)
+			try:
+				exif = data['additional_info']['exiftool']
+			except:
+				exif = 'none'
+			if not exif == "none":
+				try:	
+					prod = exif['ProductName']
+					Ent = TRX.addEntity('maltego.Phrase', prod)
+				except:
+					#no Product Name
+					pass
+				try:
+					lang = exif['LanguageCode']
+					Ent = TRX.addEntity('maltego.Phrase', lang)
+				except:
+					#no language code
+					pass
+				try:
+					char = exif['CharacterSet']
+					Ent = TRX.addEntity('maltego.Phrase', char)
+				except:
+					#no character set
+					pass
+				try:
+					orig = exif['OriginalFilename']
+					Ent = TRX.addEntity('malformity.Filename', orig)
+				except:
+					#no original name
+					pass
+				try:
+					time = exif['Timestamp']
+					Ent = TRX.addEntity('maltego.Phrase', time)
+				except:
+					#no timestamp
+					pass
+				try:
+					intern = exif['InternalName']
+					Ent = TRX.addEntity('maltego.Phrase', intern)
+				except:
+					#no internal name
+					pass
+				try:
+					type = exif['FileType']
+					Ent = TRX.addEntity('maltego.Phrase', type)
+				except:
+					#no filetype
+					pass
+				try:
+					desc = exif['FileDescription']
+					Ent = TRX.addEntity('maltego.Phrase', desc)
+				except:
+					#no file description
+					pass
+				try:
+					copy = exif['LegalCopyright']
+					Ent = TRX.addEntity('maltego.Phrase', copy)
+				except:
+					#no copyright data
+					pass
+				try:
+					entry = exif['EntryPoint']
+					Ent = TRX.addEntity('maltego.Phrase', entry)
+				except:
+					#no entry point
+					pass
+				try:
+					ver1 = exif['FileVersionNumber']
+					Ent = TRX.addEntity('maltego.Phrase', ver1)
+				except:
+					#no File Version Number
+					pass
+				try:
+					ver2 = exif['ProductVersion']
+					Ent = TRX.addEntity('maltego.Phrase', ver2)
+				except:
+					#no Product Version
+					pass
+		except:
+			TRX.addUIMessage(data['verbose_msg'])
+	else:
+		TRX.addUIMessage('Error making VT Request')
+				
+	return TRX.returnOutput()
+	
+# Requires a transform setting called 'apikey'	
+# VirusTotal Hash 2 NetActivity
+# Returns Network Activity information for a given hash
+# Input: malformity.hash
+# Output: maltego.Domain, maltego.IPv4Address, maltego.URL, maltego.Port, malformity.UserAgent
+# ^ Against best practice, due to be split out
+def vt_hash2net(hash):
+	TRX = MaltegoTransform()
+	
+	val = hash.Value
+	aKey = hash.getTransformSetting('apikey')
+	page = vtGetB(val, aKey)
+	
+	if not page == "err":
+		try:
+			data = json.loads(page)
+			try:
+				network = data['network']
+			except:
+				network = 'none'
+				pass
+			if not network == 'none':
+				try:
+					for result in network['dns']:
+						dom = result['hostname']
+						ip = result['ip']
+						Ent = TRX.addEntity('maltego.Domain', dom)
+						Ent = TRX.addEntity('maltego.IPv4Address', ip)
+				except:
+					pass
+				try:
+					for request in network['http']:
+						Ent = TRX.addEntity('maltego.URL', request['uri'])
+						Ent.addProperty('Short title', 'Short title', 'loose', request['uri'])
+				
+						Ent = TRX.addEntity('malformity.UserAgent', request['user-agent'])
+						Ent = TRX.addEntity('maltego.Port', request['port'])
+				except:
+					pass
+				try:
+					for entiry in network['tcp']:
+						e = entry['dst']
+						if e.startswith('10.'):
+							pass
+						else:
+							Ent = TRX.addEntity('maltego.IPv4Address', e)
+				except:
+					pass
+		except:
+			TRX.addUIMessage("Error Parsing VT Output")
+	else:
+		TRX.addUIMessage("Error with VT Request")
+	
+	TRX.returnOutput()
+	
+# Requires a transform setting called 'apikey'	
+# VirusTotal Hash 2 PESig
+# Returns PESignature information for a given hash
+# Input: malformity.hash
+# Output: malformity.Filename, maltego.Phrase
+# ^ Against best practice, due to be split out
+def vt_hash2pe(hash)
+	TRX = MaltegoTransform()
+	
+	val = hash.Value
+	aKey = hash.getTransformSetting('apikey')
+	page = vtGetR(val, aKey)
+	
+	if not page == "err":
+		try:
+			data = json.loads(page)
+			try:
+				addinfo = data['additional_info']
+			except:
+				addinfo = 'none'
+				pass
+			if not addinfo == 'none':
+				try:
+					pub = addinfo['sigcheck']['publisher']
+					Ent = TRX.addEntity('maltego.Phrase', pub)
+				except:
+					#no dns data
+					pass
+				try:
+					prod = addinfo['sigcheck']['product']
+					Ent = TRX.addEntity('maltego.Phrase', prod)
+				except:
+					#no product data
+					pass
+				try:
+					desc = addinfo['sigcheck']['description']
+					Ent = TRX.addEntity('maltego.Phrase', desc)
+				except:
+					#no description data
+					pass
+				try:
+					orig = addinfo['sigcheck']['original name']
+					Ent = TRX.addEntity('malformity.Filename', orig)
+				except:
+					#no original name
+					pass
+				try:
+					sign = addinfo['sigcheck']['signers']
+					Ent = TRX.addEntity('maltego.Phrase', sign)
+				except:
+					#no signers
+					pass
+				try:
+					intern = addinfo['sigcheck']['internal name']
+					Ent = TRX.addEntity('maltego.Phrase', intern)
+				except:
+					#no internal name
+					pass
+		except:
+			TRX.addUIMessage('Error Parsing VT Output')
+	else:
+		TRX.addUIMessage('Error Making VT Request')
+		
+	TRX.returnOutput()
