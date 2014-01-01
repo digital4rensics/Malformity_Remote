@@ -7,6 +7,7 @@
 ###### - Keith@malformitylabs.com - ######
 ########## - License:  GPLv3 - ###########
 
+import sys
 import json
 from maltego import *
 from helpers import *
@@ -16,7 +17,7 @@ from datetime import datetime
 # Returns a property with results from a team CYMRU hash lookup
 # Input: malformity.Hash
 # Output: origin entity properties
-def trx_CYMRUCheck(hash)
+def trx_CYMRUCheck(hash):
 	TRX = MaltegoTransform()
 	
 	val = hash.Value
@@ -43,7 +44,7 @@ def trx_CYMRUCheck(hash)
 # Input: maltego.AS
 # Output: maltego.IPv4Address
 # Optional Setting: 'limit' - limits number of results, default = 10
-def isc_ASReport(asn)
+def isc_ASReport(asn):
 	TRX = MaltegoTransform()
 	val = asn.Value
 	
@@ -84,7 +85,7 @@ def isc_ASReport(asn)
 # Returns attacks details of the specified IP
 # Input: maltego.IPv4Address
 # Output: origin entity data	
-def isc_IPReport(ip)
+def isc_IPReport(ip):
 	TRX = MaltegoTransform()
 	
 	val = ip.Value
@@ -305,7 +306,7 @@ def ss_AVScan(hash):
 # Returns hashes for a ViCheck Phrase search and sets the filename
 # Input: maltego.Phrase
 # Output: malformity.Hash
-def vi_FileSearch(phr)
+def vi_FileSearch(phr):
 	TRX = MaltegoTransform()
 	
 	val = phr.Value
@@ -322,11 +323,156 @@ def vi_FileSearch(phr)
 				if item != 'none':
 					Ent = TRX.addEntity('malformity.Hash', item.next.next)
 					name = item.previous.previous.previous
-					Ent.addProperty('Filename', 'Filename', 'loose', name
+					Ent.addProperty('Filename', 'Filename', 'loose', name)
 		except:
 			TRX.addUIMessage('Error Parsing ViCheck Results')
 	else:
 		TRX.addUIMessage('Error Retrieving ViCheck Page')
 	
 	return TRX.returnOutput()
+
+# ViCheck Dropped Hash Search
+# Returns dropped hashes for a ViCheck analysis and sets the filename
+# Input: malformity.Hash
+# Output: malformity.Hash	
+def vi_hash2dhash(hash):
+	TRX = MaltegoTransform()
 	
+	val = hash.Value
+	page = vic('hash', val)
+	
+	if not page == "err":
+		try:
+			list = page.find(text='Dropped File').previous.previous.parent.findAll('p')
+		except:
+			TRX.addUIMessage('No ViCheck Results or No Dropped Files')
+		
+		count = 1	
+		try:
+			for item in list:
+				count2 = 1
+				if count % 2 == 1:
+					for s in split:
+						if count2 % 2 == 1:
+							pass
+						else:
+							Ent = TRX.addEntity('malformity.hash', s.text)
+							name = s.previous.previous.previous.text
+							Ent.addProperty('Filename', 'Filename', 'loose', name)
+						count2 += 1
+				elif count % 2 == 0:
+					pass
+				count += 1
+		except:
+			TRX.addUIMessage('Error Parsing ViCheck Results')
+	else:
+		TRX.addUImessage('Error Retrieving ViCheck Page')
+		
+	return TRX.returnOutput()
+
+# ViCheck Hash to DNS
+# Returns DNS Queries for a ViCheck analysis
+# Input: malformity.Hash
+# Output: maltego.Domain		
+def vi_hash2dom(hash):
+	TRX = MaltegoTransform()
+	
+	val = hash.Value
+	page = vic('hash', val)
+	
+	if not page == "err":
+		try:
+			list = page.find(text='PCAP Raw DNS Queries').previous.previous.parent.findAll('p')
+		except:
+			TRX.addUIMessage('No ViCheck Results or no DNS Queries')
+			
+		try:
+			for item in list:
+				if item.text != 'none':
+					Ent = TRX.addEntity('maltego.Domain', item.text)
+		except:
+			TRX.addUIMessage('Error Parsing ViCheck Results')
+	else:
+		TRX.addUIMessage('Error Retrieving ViCheck Page')
+		
+	return TRX.returnOutput()
+	
+# ViCheck Hash to Filename
+# Returns filenames for a ViCheck analysis
+# Input: malformity.Hash
+# Output: malformity.Filename
+def vi_hash2Filename(hash):
+	TRX = MaltegoTransform()
+	
+	val = hash.Value
+	page = vic('hash', val)
+	
+	if not page == "err":
+		try:
+			list = page.find(text='File: ').findNext('b')
+		except:
+			TRX.addUIMessage('No ViCheck Results or No Filename')
+		
+		try:
+			if list.text != 'none':
+				Ent = TRX.addEntity('malformity.Filename', list.text)
+		except:
+			TRX.addUIMessage('Error parsing ViCheck Results')
+	else:
+		TRX.addUIMessage('Error Retrieving ViCheck Page')
+		
+	return TRX.returnOutput()
+	
+# ViCheck Hash to Mutex
+# Returns mutexes for a ViCheck analysis
+# Input: malformity.Hash
+# Output: malformity.Mutex
+def vi_hash2mutex(hash):
+	TRX = MaltegoTransform()
+	
+	val = hash.Value
+	page = vic('hash', val)
+	
+	if not page == "err":
+		try:
+			list = page.find(text='Mutex Created').previous.previous.parent.findAll('p')
+		except:
+			TRX.addUIMessage('No ViCheck Results or no Mutexes')
+			
+		try:
+			for item in list:
+				if item.text != 'none':
+					Ent = TRX.addEntity('malformity.Mutex', item.text)
+		except:
+			TRX.addUIMessage('Error Parsing ViCheck Results')
+	else:
+		TRX.addUIMessage('Error Retrieving ViCheck Page')
+		
+	return TRX.returnOutput()
+	
+# ViCheck Hash to Registry
+# Returns Registry Entries for a ViCheck analysis
+# Input: malformity.Hash
+# Output: malformity.RegistryEntry
+def vi_hash2reg(hash)
+	TRX = MaltegoTransform()
+	
+	val = hash.Value
+	page = vic('hash', val)
+	
+	if not page == "err":
+		try:
+			list = page.find(text='Registry Item Created').previous.previous.parent.findAll('p')
+		except:
+			TRX.addUIMessage('No ViCheck Results or Registry Items Created')
+		
+		try:
+			for item in list:
+				if item.text != 'none':
+					response += RegistryEntry(item.text)
+		except:
+			TRX.addUIMessage('Error Parsing ViCheck Results')
+	else:
+		TRX.addUIMessage('Error Retrieving ViCheck Page')
+		
+	return TRX.returnOutput()
